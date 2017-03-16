@@ -6,10 +6,20 @@
 //*-- IoT Information
 #define SSID    "Tranquility"
 #define PASS    "11111112"
-#define HOST    "192.168.137.104" // ThingSpeak IP Address: 184.106.153.149
+#define HOST    "192.168.137.16" // ThingSpeak IP Address: 184.106.153.149
 #define PORT    3000
 
-String jsonStr = "{\"temp\":23.4, \"humid\":56.7}";
+//String jsonStr = "{\"temp\":23.4, \"humid\":56.7}";
+
+int pin = D8;
+unsigned long duration;
+unsigned long starttime;
+unsigned long sampletime_ms = 3000;//sampe 3s ;
+unsigned long lowpulseoccupancy = 0;
+float ratio = 0;
+float concentration = 0;
+
+
 
 void setup() {
     Serial.begin( Baudrate );
@@ -19,7 +29,7 @@ void setup() {
     Serial.println( SSID );
     WiFi.begin( SSID, PASS );
 
-    // 持續等待並連接到指定的 WiFi SSID
+    // Keep waiting to connect WiFi SSID
     while( WiFi.status() != WL_CONNECTED )
     {
         delay(500);
@@ -33,18 +43,17 @@ void setup() {
     Serial.println( "" );
 
     Serial.println( "Tranquility System Ready!" );
-    delay(2000);
+    delay(10000);
 
 }
 
 void loop() {
   //Just number to test
-    // 確認取回的溫溼度數據可用
-    httpSend();  
-    // 每隔多久傳送一次資料
-    delay( 2000 ); // 20 second
+    // Get value
+    httpSend();
+    // Delay
+    delay( 60000 ); // 20 second
 }
-
 
 void httpSend() {
     WiFiClient client;
@@ -56,21 +65,34 @@ void httpSend() {
     }
     else
     {
-        // 準備上傳到 ThingSpeak IoT Server 的資料
-        // 已經預先設定好 ThingSpeak IoT Channel 的欄位
-        // field1：溫度；field2：濕度
-    Serial.println("connected");
-    client.println("POST / HTTP/1.1");
-    client.println("Content-Type: application/json");
-    client.print("Content-Length: ");
-    client.println(jsonStr.length());
-    client.println();    
-    client.print(jsonStr);
-        
-  delay(10);
-  client.stop();
+
+          duration = pulseIn(pin, LOW);
+          lowpulseoccupancy = lowpulseoccupancy+duration;
+
+          if ((millis()-starttime) > sampletime_ms)//if the sampel time == 3s
+          {
+           ratio = lowpulseoccupancy/(sampletime_ms*10.0);  // Integer percentage 0=>100
+           concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio+0.62; // using spec sheet curve
+           Serial.print("concentration = ");
+           Serial.print(concentration);
+           Serial.println(" pcs/0.01cf");
+           Serial.println("\n");
+           lowpulseoccupancy = 0;
+           starttime = millis();
+           String jsonStr = "{\"temp\":23.4, \"humid\":56.7, \"PM\":0.62}";
+
+
+               Serial.println("connected");
+               client.println("POST / HTTP/1.1");
+               client.println("Content-Type: application/json");
+               client.print("Content-Length: ");
+               client.println(jsonStr.length());
+               client.println();
+               client.print(jsonStr);
+
+             delay(10);
+             client.stop();
+
+          }
     }
 }
-
-
-
